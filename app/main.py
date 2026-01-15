@@ -445,6 +445,120 @@ def get_user_actions(user_id: int, page: int = 1, per_page: int = 20,
     return ModerationActionList(actions=actions, total=total, page=page, per_page=per_page)
 
 
+@app.get("/users/search")
+def search_users(q: str = Query(..., description="Search query for username, email, or user ID"),
+                 limit: int = Query(50, ge=1, le=100),
+                 session: Session = Depends(get_session),
+                 current_user: dict = Depends(require_moderator)):
+    """Search users by username, email, or ID (moderator only).
+    Proxies to the login service's user directory endpoint and enriches with moderation status."""
+    users = []
+    
+    try:
+        # Call the login service to search users
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(
+                f"{LOGIN_SERVICE_URL}/users/directory",
+                params={"q": q, "limit": limit}
+            )
+            if response.status_code == 200:
+                users = response.json()
+    except Exception as e:
+        logging.warning(f"Failed to fetch users from login service: {e}")
+        raise HTTPException(status_code=502, detail=f"Failed to fetch users from login service: {e}")
+    
+    # Enrich users with moderation status
+    enriched_users = []
+    for user in users:
+        user_id = user.get("id")
+        mod_status = session.exec(
+            select(UserModerationStatus).where(UserModerationStatus.user_id == user_id)
+        ).first()
+        
+        enriched_user = {
+            "id": user_id,
+            "username": user.get("username"),
+            "email": user.get("email", ""),
+            "role": user.get("role", "user"),
+            "created_at": user.get("created_at"),
+            "is_banned": mod_status.is_banned if mod_status else False,
+            "is_muted": mod_status.is_muted if mod_status else False,
+            "is_suspended": mod_status.is_suspended if mod_status else False,
+            "funds_frozen": mod_status.funds_frozen if mod_status else False,
+        }
+        enriched_users.append(enriched_user)
+    
+    return enriched_users
+
+
+@app.get("/users/{user_id}")
+def get_user_detail(user_id: int,
+                    session: Session = Depends(get_session),
+                    current_user: dict = Depends(require_moderator)):
+    """Get user details with moderation status (moderator only).
+    Fetches user info from login service and enriches with moderation status."""
+    user_data = None
+    
+    try:
+        # Call the login service to get user info (public endpoint)
+        with httpx.Client(timeout=10.0) as client:
+            response = client.get(f"{LOGIN_SERVICE_URL}/users/{user_id}/public")
+            if response.status_code == 200:
+                user_data = response.json()
+    except Exception as e:
+        logging.warning(f"Failed to fetch user from login service: {e}")
+    
+    if not user_data:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get moderation status
+    mod_status = session.exec(
+        select(UserModerationStatus).where(UserModerationStatus.user_id == user_id)
+    ).first()
+    
+    return {
+        "id": user_id,
+        "username": user_data.get("username"),
+        "email": user_data.get("email", ""),
+        "role": user_data.get("role", "user"),
+        "created_at": user_data.get("created_at"),
+        "is_banned": mod_status.is_banned if mod_status else False,
+        "is_muted": mod_status.is_muted if mod_status else False,
+        "is_suspended": mod_status.is_suspended if mod_status else False,
+        "funds_frozen": mod_status.funds_frozen if mod_status else False,
+        "warning_count": mod_status.warning_count if mod_status else 0,
+        "ban_reason": mod_status.ban_reason if mod_status else None,
+        "mute_reason": mod_status.mute_reason if mod_status else None,
+        "suspend_reason": mod_status.suspend_reason if mod_status else None,
+        "mute_expires_at": str(mod_status.mute_expires_at) if mod_status and mod_status.mute_expires_at else None,
+        "suspend_expires_at": str(mod_status.suspend_expires_at) if mod_status and mod_status.suspend_expires_at else None,
+    }
+
+
+@app.get("/users/{user_id}/actions")
+def get_user_actions_short(user_id: int, page: int = 1, per_page: int = 20,
+                           session: Session = Depends(get_session),
+                           current_user: dict = Depends(require_moderator)):
+    """Get all moderation actions for a user (short URL without /api/v1 prefix)"""
+    query = select(ModerationAction).where(ModerationAction.target_user_id == user_id)
+    query = query.order_by(ModerationAction.created_at.desc())
+    actions = session.exec(query.offset((page-1)*per_page).limit(per_page)).all()
+    # Return as list of dicts for simpler frontend consumption
+    return [
+        {
+            "id": a.id,
+            "action_type": a.action_type.value if a.action_type else None,
+            "reason": a.reason,
+            "moderator_user_id": a.moderator_user_id,
+            "created_at": str(a.created_at) if a.created_at else None,
+            "duration_minutes": a.duration_minutes,
+            "expires_at": str(a.expires_at) if a.expires_at else None,
+            "is_active": a.is_active,
+        }
+        for a in actions
+    ]
+
+
 # ============== DISPUTE ENDPOINTS ==============
 
 @app.post("/api/v1/disputes", response_model=DisputeRead)

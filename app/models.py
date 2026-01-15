@@ -108,13 +108,13 @@ class Report(SQLModel, table=True):
     reporter_user_id: int = Field(index=True)  # User who submitted the report
     reported_user_id: Optional[int] = Field(default=None, index=True)  # User being reported (if applicable)
     content_type: ContentType = Field(index=True)  # Type of content being reported
-    content_id: Optional[str] = Field(default=None, index=True)  # ID of the content (offer_id, review_id, etc.)
+    content_id: Optional[str] = Field(default=None, max_length=64, index=True)  # ID of the content (offer_id, review_id, etc.)
     category: ReportCategory = Field(index=True)
-    description: str  # Reporter's description of the issue
-    evidence: Optional[str] = Field(default=None)  # URLs or references to evidence
+    description: str = Field(max_length=2048)  # Reporter's description of the issue
+    evidence: Optional[str] = Field(default=None, max_length=2048)  # URLs or references to evidence
     status: ReportStatus = Field(default=ReportStatus.PENDING, index=True)
     assigned_moderator_id: Optional[int] = Field(default=None, index=True)
-    resolution_notes: Optional[str] = Field(default=None)
+    resolution_notes: Optional[str] = Field(default=None, max_length=2048)
     created_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"server_default": func.current_timestamp()})
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"server_default": func.current_timestamp(), "onupdate": func.current_timestamp()})
     resolved_at: Optional[datetime] = Field(default=None)
@@ -129,9 +129,9 @@ class ModerationAction(SQLModel, table=True):
     target_user_id: Optional[int] = Field(default=None, index=True)  # User affected by the action
     action_type: ModerationActionType = Field(index=True)
     content_type: Optional[ContentType] = Field(default=None)  # Type of content affected
-    content_id: Optional[str] = Field(default=None)  # ID of content affected
-    reason: str  # Moderator's reason for the action
-    details: Optional[str] = Field(default=None)  # Additional details (JSON string for complex data)
+    content_id: Optional[str] = Field(default=None, max_length=64)  # ID of content affected
+    reason: str = Field(max_length=1024)  # Moderator's reason for the action
+    details: Optional[str] = Field(default=None, max_length=4096)  # Additional details (JSON string for complex data)
     related_report_id: Optional[int] = Field(default=None, index=True)  # Related report if any
     related_dispute_id: Optional[int] = Field(default=None, index=True)  # Related dispute if any
     duration_minutes: Optional[int] = Field(default=None)  # For temporary actions (mute, suspend)
@@ -153,9 +153,9 @@ class UserModerationStatus(SQLModel, table=True):
     funds_frozen: bool = Field(default=False, index=True)
     frozen_amount: float = Field(default=0.0)
     warning_count: int = Field(default=0)
-    ban_reason: Optional[str] = Field(default=None)
-    mute_reason: Optional[str] = Field(default=None)
-    suspend_reason: Optional[str] = Field(default=None)
+    ban_reason: Optional[str] = Field(default=None, max_length=1024)
+    mute_reason: Optional[str] = Field(default=None, max_length=1024)
+    suspend_reason: Optional[str] = Field(default=None, max_length=1024)
     mute_expires_at: Optional[datetime] = Field(default=None, index=True)
     suspend_expires_at: Optional[datetime] = Field(default=None, index=True)
     last_action_at: Optional[datetime] = Field(default=None)
@@ -175,13 +175,13 @@ class Dispute(SQLModel, table=True):
     initiated_by_user_id: int = Field(index=True)  # Who opened the dispute
     status: DisputeStatus = Field(default=DisputeStatus.OPEN, index=True)
     category: ReportCategory = Field(index=True)
-    description: str  # Initial dispute description
-    buyer_statement: Optional[str] = Field(default=None)
-    seller_statement: Optional[str] = Field(default=None)
-    evidence_buyer: Optional[str] = Field(default=None)  # Evidence provided by buyer
-    evidence_seller: Optional[str] = Field(default=None)  # Evidence provided by seller
+    description: str = Field(max_length=2048)  # Initial dispute description
+    buyer_statement: Optional[str] = Field(default=None, max_length=2048)
+    seller_statement: Optional[str] = Field(default=None, max_length=2048)
+    evidence_buyer: Optional[str] = Field(default=None, max_length=2048)  # Evidence provided by buyer
+    evidence_seller: Optional[str] = Field(default=None, max_length=2048)  # Evidence provided by seller
     assigned_moderator_id: Optional[int] = Field(default=None, index=True)
-    resolution_notes: Optional[str] = Field(default=None)
+    resolution_notes: Optional[str] = Field(default=None, max_length=2048)
     resolution_amount_to_buyer: Optional[float] = Field(default=None)  # Amount refunded to buyer
     resolution_amount_to_seller: Optional[float] = Field(default=None)  # Amount released to seller
     funds_frozen_amount: float = Field(default=0.0)  # Amount frozen during dispute
@@ -198,8 +198,8 @@ class DisputeMessage(SQLModel, table=True):
     dispute_id: int = Field(index=True)
     sender_user_id: int = Field(index=True)
     is_moderator: bool = Field(default=False)
-    message: str
-    attachments: Optional[str] = Field(default=None)  # JSON array of attachment URLs
+    message: str = Field(max_length=4096)
+    attachments: Optional[str] = Field(default=None, max_length=2048)  # JSON array of attachment URLs
     created_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"server_default": func.current_timestamp()})
 
 
@@ -211,10 +211,10 @@ class Appeal(SQLModel, table=True):
     user_id: int = Field(index=True)  # User appealing
     moderation_action_id: int = Field(index=True)  # Action being appealed
     status: AppealStatus = Field(default=AppealStatus.PENDING, index=True)
-    reason: str  # User's reason for appeal
-    evidence: Optional[str] = Field(default=None)  # Supporting evidence
+    reason: str = Field(max_length=2048)  # User's reason for appeal
+    evidence: Optional[str] = Field(default=None, max_length=2048)  # Supporting evidence
     assigned_moderator_id: Optional[int] = Field(default=None, index=True)
-    resolution_notes: Optional[str] = Field(default=None)
+    resolution_notes: Optional[str] = Field(default=None, max_length=2048)
     created_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"server_default": func.current_timestamp()})
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"server_default": func.current_timestamp(), "onupdate": func.current_timestamp()})
     resolved_at: Optional[datetime] = Field(default=None)
@@ -226,13 +226,13 @@ class AuditLog(SQLModel, table=True):
     
     id: Optional[int] = Field(default=None, primary_key=True)
     actor_user_id: int = Field(index=True)  # Who performed the action
-    actor_role: str = Field(index=True)  # Role at time of action (admin, moderator)
-    action: str = Field(index=True)  # Action performed
-    target_type: str = Field(index=True)  # Type of target (user, report, dispute, etc.)
-    target_id: Optional[str] = Field(default=None, index=True)  # ID of target
-    details: str  # JSON string with full details
-    ip_address: Optional[str] = Field(default=None)
-    user_agent: Optional[str] = Field(default=None)
+    actor_role: str = Field(max_length=32, index=True)  # Role at time of action (admin, moderator)
+    action: str = Field(max_length=64, index=True)  # Action performed
+    target_type: str = Field(max_length=32, index=True)  # Type of target (user, report, dispute, etc.)
+    target_id: Optional[str] = Field(default=None, max_length=64, index=True)  # ID of target
+    details: str = Field(max_length=4096)  # JSON string with full details
+    ip_address: Optional[str] = Field(default=None, max_length=45)
+    user_agent: Optional[str] = Field(default=None, max_length=512)
     created_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"server_default": func.current_timestamp()})
 
 
@@ -243,8 +243,8 @@ class Notification(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(index=True)
     notification_type: NotificationType = Field(index=True)
-    title: str
-    message: str
+    title: str = Field(max_length=255)
+    message: str = Field(max_length=2048)
     channel: NotificationChannel = Field(default=NotificationChannel.BOTH)
     related_action_id: Optional[int] = Field(default=None)
     related_report_id: Optional[int] = Field(default=None)
@@ -262,11 +262,11 @@ class ModerationQueue(SQLModel, table=True):
     __tablename__ = "moderation_queue"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    item_type: str = Field(index=True)  # report, dispute, appeal
+    item_type: str = Field(max_length=32, index=True)  # report, dispute, appeal
     item_id: int = Field(index=True)
     priority: int = Field(default=0, index=True)  # Higher = more urgent
     assigned_moderator_id: Optional[int] = Field(default=None, index=True)
-    status: str = Field(default="pending", index=True)  # pending, in_progress, completed
+    status: str = Field(default="pending", max_length=32, index=True)  # pending, in_progress, completed
     created_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"server_default": func.current_timestamp()})
     claimed_at: Optional[datetime] = Field(default=None)
     completed_at: Optional[datetime] = Field(default=None)
